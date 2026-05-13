@@ -3,6 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from enrich import process_iocs
+from src.enrichers.http_client import RateLimitError
 
 
 MOCK_ABUSEIPDB_RESPONSE = {
@@ -50,3 +51,50 @@ class TestProcessIocsWithRealEnricher:
 
         assert len(records) == 1
         assert records[0]["ioc"] == "8.8.8.8"
+
+
+class TestProcessIocsWithVirusTotal:
+    def test_vt_enrichment_called_when_key_set(self, monkeypatch, tmp_path):
+        """VirusTotal enricher is called when VT_API_KEY is set."""
+        import enrich as enrich_mod
+        monkeypatch.setattr(enrich_mod, "VT_API_KEY", "fake-vt-key")
+        csv_file = tmp_path / "iocs.csv"
+        csv_file.write_text("ioc\n8.8.8.8\n")
+        with patch("src.enrichers.virustotal.get_json") as mock_vt:
+            mock_vt.return_value = {
+                "data": {"attributes": {
+                    "last_analysis_stats": {"malicious": 2, "suspicious": 1, "harmless": 50},
+                    "reputation": -5,
+                    "tags": ["scanner"],
+                }}
+            }
+            with patch("src.enrichers.abuseipdb.get_json") as mock_abuse:
+                mock_abuse.return_value = {"data": {"abuseConfidenceScore": 0, "totalReports": 0, "countryCode": "US", "isp": "Google"}}
+                results = enrich_mod.process_iocs(str(csv_file))
+        assert results[0]["vt_malicious"] == 2
+        assert results[0]["vt_suspicious"] == 1
+
+    def test_vt_skipped_when_no_key(self, monkeypatch, tmp_path):
+        """VirusTotal enricher is skipped when VT_API_KEY is not set."""
+        import enrich as enrich_mod
+        monkeypatch.setattr(enrich_mod, "VT_API_KEY", None)
+        csv_file = tmp_path / "iocs.csv"
+        csv_file.write_text("ioc\n8.8.8.8\n")
+        with patch("src.enrichers.virustotal.get_json") as mock_vt:
+            with patch("src.enrichers.abuseipdb.get_json") as mock_abuse:
+                mock_abuse.return_value = {"data": {"abuseConfidenceScore": 0, "totalReports": 0, "countryCode": "US", "isp": "Google"}}
+                results = enrich_mod.process_iocs(str(csv_file))
+        mock_vt.assert_not_called()
+        assert results[0]["vt_malicious"] == 0
+
+    def test_vt_rate_limit_falls_back_to_mock(self, monkeypatch, tmp_path):
+        """VirusTotal rate limit error falls back gracefully without crashing."""
+        import enrich as enrich_mod
+        monkeypatch.setattr(enrich_mod, "VT_API_KEY", "fake-vt-key")
+        csv_file = tmp_path / "iocs.csv"
+        csv_file.write_text("ioc\n8.8.8.8\n")
+        with patch("src.enrichers.virustotal.get_json", side_effect=RateLimitError("rate limit")):
+            with patch("src.enrichers.abuseipdb.get_json") as mock_abuse:
+                mock_abuse.return_value = {"data": {"abuseConfidenceScore": 0, "totalReports": 0, "countryCode": "US", "isp": "Google"}}
+                results = enrich_mod.process_iocs(str(csv_file))
+        assert results[0]["vt_malicious"] == 0
