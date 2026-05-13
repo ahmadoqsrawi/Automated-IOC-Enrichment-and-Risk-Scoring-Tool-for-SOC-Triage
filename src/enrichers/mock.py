@@ -45,7 +45,4 @@ _MOCK_DATA = {
 
 def enrich_mock(ioc: str, ioc_type: str) -> EnrichmentResult:
     defaults = _MOCK_DATA.get(ioc_type, {})
-    result = EnrichmentResult(ioc=ioc, ioc_type=ioc_type)
-    for key, value in defaults.items():
-        setattr(result, key, value)
-    return result
+    return EnrichmentResult(ioc=ioc, ioc_type=ioc_type, **defaults)
