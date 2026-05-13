@@ -1,10 +1,11 @@
 import argparse
 import json
-import os
+import logging
 import sys
 from pathlib import Path
 
 import pandas as pd
+from tabulate import tabulate
 from tqdm import tqdm
 
 from src.config import OUTPUT_DIR
@@ -13,12 +14,18 @@ from src.ioc_parser import detect_ioc_type, normalize_ioc
 from src.reporting import generate_summary
 from src.scoring import compute_risk_score, get_verdict
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+_log = logging.getLogger(__name__)
+
 
 def process_iocs(input_path: str) -> list[dict]:
-    df = pd.read_csv(input_path)
+    path = Path(input_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    df = pd.read_csv(path)
     if "ioc" not in df.columns:
-        print("ERROR: Input CSV must have an 'ioc' column.")
-        sys.exit(1)
+        raise ValueError("Input CSV must have an 'ioc' column.")
 
     records = []
     for _, row in tqdm(df.iterrows(), total=len(df), desc="Enriching IOCs"):
@@ -26,22 +33,26 @@ def process_iocs(input_path: str) -> list[dict]:
         ioc = normalize_ioc(raw_ioc)
         ioc_type = str(row.get("type", "")).strip() or detect_ioc_type(ioc)
 
-        result = enrich_mock(ioc, ioc_type)
-        result.risk_score, result.score_breakdown = compute_risk_score(result)
-        result.verdict = get_verdict(result.risk_score)
-        result.summary = generate_summary(result)
+        enriched = enrich_mock(ioc, ioc_type)
+        risk_score, score_breakdown = compute_risk_score(enriched)
+        verdict = get_verdict(risk_score)
+
+        # Build a new result with computed fields populated
+        from dataclasses import replace
+        enriched = replace(enriched, risk_score=risk_score, score_breakdown=score_breakdown, verdict=verdict)
+        summary = generate_summary(enriched)
 
         records.append({
-            "ioc": result.ioc,
-            "type": result.ioc_type,
-            "verdict": result.verdict,
-            "risk_score": result.risk_score,
-            "vt_malicious": result.vt_malicious,
-            "abuse_score": result.abuse_score,
-            "urlhaus_status": result.urlhaus_status,
-            "country": result.country,
-            "asn": result.asn,
-            "summary": result.summary,
+            "ioc": enriched.ioc,
+            "type": enriched.ioc_type,
+            "verdict": verdict,
+            "risk_score": risk_score,
+            "vt_malicious": enriched.vt_malicious,
+            "abuse_score": enriched.abuse_score,
+            "urlhaus_status": enriched.urlhaus_status,
+            "country": enriched.country,
+            "asn": enriched.asn,
+            "summary": summary,
         })
 
     return records
@@ -49,18 +60,16 @@ def process_iocs(input_path: str) -> list[dict]:
 
 def write_csv(records: list[dict], output_path: Path) -> None:
     pd.DataFrame(records).to_csv(output_path, index=False)
-    print(f"CSV report saved to {output_path}")
+    _log.info("CSV report saved to %s", output_path)
 
 
 def write_json(records: list[dict], output_path: Path) -> None:
     with open(output_path, "w") as f:
         json.dump(records, f, indent=2)
-    print(f"JSON report saved to {output_path}")
+    _log.info("JSON report saved to %s", output_path)
 
 
 def write_markdown(records: list[dict], output_path: Path) -> None:
-    from tabulate import tabulate
-
     verdicts = [r["verdict"] for r in records]
     counts = {v: verdicts.count(v) for v in ("critical", "high", "medium", "low")}
 
@@ -85,7 +94,7 @@ def write_markdown(records: list[dict], output_path: Path) -> None:
 
     with open(output_path, "w") as f:
         f.write("\n".join(lines))
-    print(f"Markdown report saved to {output_path}")
+    _log.info("Markdown report saved to %s", output_path)
 
 
 def main() -> None:
@@ -97,10 +106,14 @@ def main() -> None:
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    records = process_iocs(args.input)
+    try:
+        records = process_iocs(args.input)
+    except (FileNotFoundError, ValueError) as exc:
+        _log.error("ERROR: %s", exc)
+        sys.exit(1)
 
     ext = {"csv": ".csv", "json": ".json", "md": ".md"}[args.fmt]
-    output_path = Path(args.output) if args.output else OUTPUT_DIR / f"enriched_report{ext}"
+    output_path: Path = Path(args.output) if args.output else OUTPUT_DIR / f"enriched_report{ext}"
 
     if args.fmt == "csv":
         write_csv(records, output_path)
