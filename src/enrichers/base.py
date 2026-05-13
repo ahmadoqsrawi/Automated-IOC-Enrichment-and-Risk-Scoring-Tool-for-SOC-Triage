@@ -12,7 +12,7 @@ class EnrichmentResult:
     vt_suspicious: int = 0
     vt_harmless: int = 0
     vt_reputation: int = 0
-    vt_tags: list = field(default_factory=list)
+    vt_tags: list[str] = field(default_factory=list)
 
     # AbuseIPDB fields (IPs only)
     abuse_score: int = 0
@@ -23,7 +23,7 @@ class EnrichmentResult:
     # URLhaus fields
     urlhaus_status: str = "not_found"
     urlhaus_threat: str = ""
-    urlhaus_tags: list = field(default_factory=list)
+    urlhaus_tags: list[str] = field(default_factory=list)
 
     # GeoIP / context
     country: str = ""
@@ -33,4 +33,4 @@ class EnrichmentResult:
     risk_score: int = 0
     verdict: str = ""
     summary: str = ""
-    score_breakdown: dict = field(default_factory=dict)
+    score_breakdown: dict[str, int] = field(default_factory=dict)

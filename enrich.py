@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -38,7 +39,6 @@ def process_iocs(input_path: str) -> list[dict]:
         verdict = get_verdict(risk_score)
 
         # Build a new result with computed fields populated
-        from dataclasses import replace
         enriched = replace(enriched, risk_score=risk_score, score_breakdown=score_breakdown, verdict=verdict)
         summary = generate_summary(enriched)
 

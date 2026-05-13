@@ -42,3 +42,15 @@ class TestGenerateSummary:
         r = _make(risk_score=90, verdict="critical", vt_malicious=10)
         summary = generate_summary(r)
         assert "recommended action" in summary.lower() or "block" in summary.lower()
+
+    def test_single_vt_detection_mentioned(self):
+        r = _make(risk_score=25, verdict="medium", vt_malicious=2)
+        summary = generate_summary(r)
+        assert "virustotal" in summary.lower()
+        assert "2" in summary
+
+    def test_urlhaus_offline_mentioned(self):
+        r = _make(risk_score=40, verdict="medium", urlhaus_status="offline")
+        summary = generate_summary(r)
+        assert "urlhaus" in summary.lower()
+        assert "previously active" in summary.lower()

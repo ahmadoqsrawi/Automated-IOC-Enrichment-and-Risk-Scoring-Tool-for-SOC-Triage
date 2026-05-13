@@ -1,6 +1,7 @@
 import ipaddress
 import re
 from typing import Literal
+from urllib.parse import urlparse, urlunparse
 
 IOCType = Literal["ip", "url", "hash", "domain", "unknown"]
 
@@ -42,7 +43,6 @@ def normalize_ioc(ioc: str) -> str:
 
     if value.startswith(("http://", "https://")):
         # Only lowercase scheme+host, preserve case-sensitive path
-        from urllib.parse import urlparse, urlunparse
         parsed = urlparse(value)
         normalized = urlunparse((
             parsed.scheme.lower(),
