@@ -144,7 +144,7 @@ class TestProcessIocsWithUrlhaus:
         csv_file = tmp_path / "iocs.csv"
         csv_file.write_text("ioc\nhttps://malware.example.com/x\n")
         with patch("src.enrichers.urlhaus.post_json", side_effect=RateLimitError("too many")):
-            with caplog.at_level(logging.WARNING, logger="enrich"):
+            with caplog.at_level(logging.WARNING, logger="src.enrich"):
                 results = enrich_mod.process_iocs(str(csv_file))
         assert any("rate limit" in m.lower() for m in caplog.messages)
         # Falls back to mock data; URL mock default is "online"
