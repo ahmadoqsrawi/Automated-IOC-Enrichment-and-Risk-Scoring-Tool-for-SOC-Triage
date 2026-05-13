@@ -40,3 +40,27 @@ class TestNormalizeIoc:
 
     def test_strips_trailing_slash_from_domain(self):
         assert normalize_ioc("example.com/") == "example.com"
+
+
+class TestEdgeCases:
+    def test_empty_string_raises_in_detect(self):
+        with pytest.raises(ValueError):
+            detect_ioc_type("")
+
+    def test_whitespace_only_raises_in_detect(self):
+        with pytest.raises(ValueError):
+            detect_ioc_type("   ")
+
+    def test_empty_string_raises_in_normalize(self):
+        with pytest.raises(ValueError):
+            normalize_ioc("")
+
+    def test_garbage_input_returns_unknown(self):
+        assert detect_ioc_type("not_an_ioc_at_all") == "unknown"
+
+    def test_non_hex_32_chars_is_not_hash(self):
+        assert detect_ioc_type("z" * 32) == "unknown"
+
+    def test_normalize_url_preserves_path_case(self):
+        result = normalize_ioc("https://Example.COM/CaseSensitivePath")
+        assert result == "https://example.com/CaseSensitivePath"
