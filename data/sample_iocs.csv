@@ -1,0 +1,7 @@
+ioc,type
+8.8.8.8,ip
+1.1.1.1,ip
+example.com,domain
+http://example.com/test.exe,url
+44d88612fea8a8f36de82e1278abb02f,hash
+eicar.com,domain
