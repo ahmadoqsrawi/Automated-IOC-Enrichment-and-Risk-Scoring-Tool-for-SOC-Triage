@@ -104,3 +104,48 @@ class TestProcessIocsWithVirusTotal:
                     results = enrich_mod.process_iocs(str(csv_file))
         assert any("rate limit" in m.lower() for m in caplog.messages)
         assert results[0]["vt_malicious"] == 0
+
+
+class TestProcessIocsWithUrlhaus:
+    def test_urlhaus_called_for_url_ioc(self, monkeypatch, tmp_path):
+        import enrich as enrich_mod
+        monkeypatch.setattr(enrich_mod, "ABUSEIPDB_API_KEY", None)
+        monkeypatch.setattr(enrich_mod, "VT_API_KEY", None)
+        monkeypatch.setattr(enrich_mod, "URLHAUS_AUTH_KEY", "fake-urlhaus-key")
+        csv_file = tmp_path / "iocs.csv"
+        csv_file.write_text("ioc\nhttps://malware.example.com/bad.exe\n")
+        with patch("src.enrichers.urlhaus.post_json") as mock_post:
+            mock_post.return_value = {
+                "query_status": "is_url",
+                "url_status": "online",
+                "tags": ["trojan"],
+                "threat": "malware_download",
+            }
+            results = enrich_mod.process_iocs(str(csv_file))
+        assert results[0]["urlhaus_status"] == "online"
+
+    def test_urlhaus_skipped_when_type_not_supported(self, monkeypatch, tmp_path):
+        import enrich as enrich_mod
+        monkeypatch.setattr(enrich_mod, "ABUSEIPDB_API_KEY", None)
+        monkeypatch.setattr(enrich_mod, "VT_API_KEY", None)
+        monkeypatch.setattr(enrich_mod, "URLHAUS_AUTH_KEY", "fake-key")
+        csv_file = tmp_path / "iocs.csv"
+        csv_file.write_text("ioc,type\ngarbageioc,unknown\n")
+        with patch("src.enrichers.urlhaus.post_json") as mock_post:
+            results = enrich_mod.process_iocs(str(csv_file))
+        mock_post.assert_not_called()
+        assert results[0]["urlhaus_status"] == "not_found"
+
+    def test_urlhaus_rate_limit_falls_back_gracefully(self, monkeypatch, tmp_path, caplog):
+        import enrich as enrich_mod
+        monkeypatch.setattr(enrich_mod, "ABUSEIPDB_API_KEY", None)
+        monkeypatch.setattr(enrich_mod, "VT_API_KEY", None)
+        monkeypatch.setattr(enrich_mod, "URLHAUS_AUTH_KEY", "fake-key")
+        csv_file = tmp_path / "iocs.csv"
+        csv_file.write_text("ioc\nhttps://malware.example.com/x\n")
+        with patch("src.enrichers.urlhaus.post_json", side_effect=RateLimitError("too many")):
+            with caplog.at_level(logging.WARNING, logger="enrich"):
+                results = enrich_mod.process_iocs(str(csv_file))
+        assert any("rate limit" in m.lower() for m in caplog.messages)
+        # Falls back to mock data; URL mock default is "online"
+        assert results[0]["urlhaus_status"] is not None
