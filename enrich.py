@@ -9,7 +9,9 @@ import pandas as pd
 from tabulate import tabulate
 from tqdm import tqdm
 
-from src.config import OUTPUT_DIR
+from src.config import ABUSEIPDB_API_KEY, OUTPUT_DIR
+from src.enrichers.abuseipdb import enrich_abuseipdb
+from src.enrichers.http_client import ApiError, RateLimitError
 from src.enrichers.mock import enrich_mock
 from src.ioc_parser import detect_ioc_type, normalize_ioc
 from src.reporting import generate_summary
@@ -35,6 +37,15 @@ def process_iocs(input_path: str) -> list[dict]:
         ioc_type = str(row.get("type", "")).strip() or detect_ioc_type(ioc)
 
         enriched = enrich_mock(ioc, ioc_type)
+
+        if ioc_type == "ip" and ABUSEIPDB_API_KEY:
+            try:
+                enriched = enrich_abuseipdb(enriched, api_key=ABUSEIPDB_API_KEY)
+            except RateLimitError:
+                _log.warning("AbuseIPDB rate limit hit for %s, using mock data", ioc)
+            except ApiError as exc:
+                _log.warning("AbuseIPDB error for %s: %s, using mock data", ioc, exc)
+
         risk_score, score_breakdown = compute_risk_score(enriched)
         verdict = get_verdict(risk_score)
 
