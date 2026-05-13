@@ -9,7 +9,7 @@ from src.enrichers.http_client import RateLimitError, ApiError
 
 
 def _vt_response(malicious: int = 5, suspicious: int = 2, harmless: int = 60,
-                 reputation: int = -10, tags: list = None) -> dict:
+                 reputation: int = -10, tags: list[str] | None = None) -> dict:
     return {
         "data": {
             "attributes": {

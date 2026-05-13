@@ -46,7 +46,7 @@ def enrich_virustotal(result: EnrichmentResult, api_key: str) -> EnrichmentResul
     url = _endpoint(result.ioc, result.ioc_type)
     headers = {"x-apikey": api_key}
 
-    response = get_json(url, headers=headers, params={})
+    response = get_json(url, headers=headers, params={})  # params required by signature; empty dict for VT API
     attrs = response.get("data", {}).get("attributes", {})
 
     if not attrs:
