@@ -2,51 +2,74 @@ from src.enrichers.base import EnrichmentResult
 from src.scoring import compute_risk_score, get_verdict
 
 
-class TestComputeRiskScore:
-    def _make(self, **kwargs) -> EnrichmentResult:
-        r = EnrichmentResult(ioc="test", ioc_type="ip")
-        for k, v in kwargs.items():
-            setattr(r, k, v)
-        return r
+def _make(**kwargs) -> EnrichmentResult:
+    defaults = dict(
+        ioc="test",
+        ioc_type="ip",
+        vt_malicious=0,
+        vt_suspicious=0,
+        abuse_score=0,
+        urlhaus_status="not_found",
+    )
+    return EnrichmentResult(**(defaults | kwargs))
 
+
+class TestComputeRiskScore:
     def test_clean_ip_is_low(self):
-        r = self._make(vt_malicious=0, abuse_score=0, urlhaus_status="not_found")
+        r = _make(vt_malicious=0, abuse_score=0, urlhaus_status="not_found")
         score, _ = compute_risk_score(r)
         assert score <= 20
 
     def test_high_vt_malicious_adds_40(self):
-        r = self._make(vt_malicious=5, abuse_score=0, urlhaus_status="not_found")
+        r = _make(vt_malicious=5)
         score, breakdown = compute_risk_score(r)
         assert breakdown["vt_malicious"] == 40
         assert score >= 40
 
     def test_medium_vt_malicious_adds_25(self):
-        r = self._make(vt_malicious=2, abuse_score=0, urlhaus_status="not_found")
+        r = _make(vt_malicious=2)
         _, breakdown = compute_risk_score(r)
         assert breakdown["vt_malicious"] == 25
 
     def test_high_abuse_score_adds_40(self):
-        r = self._make(vt_malicious=0, abuse_score=92, urlhaus_status="not_found")
+        r = _make(abuse_score=92)
         score, breakdown = compute_risk_score(r)
         assert breakdown["abuse_score"] == 40
 
+    def test_medium_abuse_score_adds_25(self):
+        r = _make(abuse_score=70)
+        _, breakdown = compute_risk_score(r)
+        assert breakdown["abuse_score"] == 25
+
+    def test_low_abuse_score_adds_10(self):
+        r = _make(abuse_score=20)
+        _, breakdown = compute_risk_score(r)
+        assert breakdown["abuse_score"] == 10
+
+    def test_vt_suspicious_adds_10(self):
+        r = _make(vt_suspicious=2)
+        _, breakdown = compute_risk_score(r)
+        assert breakdown["vt_suspicious"] == 10
+
     def test_urlhaus_online_adds_40(self):
-        r = self._make(vt_malicious=0, abuse_score=0, urlhaus_status="online")
+        r = _make(urlhaus_status="online")
         _, breakdown = compute_risk_score(r)
         assert breakdown["urlhaus"] == 40
 
     def test_urlhaus_offline_adds_25(self):
-        r = self._make(vt_malicious=0, abuse_score=0, urlhaus_status="offline")
+        r = _make(urlhaus_status="offline")
         _, breakdown = compute_risk_score(r)
         assert breakdown["urlhaus"] == 25
 
     def test_score_capped_at_100(self):
-        r = self._make(vt_malicious=10, abuse_score=99, urlhaus_status="online")
+        r = _make(vt_malicious=10, abuse_score=99, urlhaus_status="online")
         score, _ = compute_risk_score(r)
         assert score == 100
 
 
 class TestGetVerdict:
+    """Boundaries: low (0-20), medium (21-50), high (51-80), critical (81-100)."""
+
     def test_low(self):
         assert get_verdict(10) == "low"
 

@@ -2,6 +2,10 @@ from src.enrichers.base import EnrichmentResult
 
 
 def generate_summary(result: EnrichmentResult) -> str:
+    """Generate a SOC analyst summary. Requires result.verdict to be pre-populated."""
+    if not result.verdict:
+        raise ValueError("EnrichmentResult.verdict must be set before generating a summary")
+
     parts = []
 
     if result.vt_malicious >= 5:
