@@ -28,7 +28,7 @@ def get_json(url: str, headers: dict[str, str], params: dict[str, Any], timeout:
         raise ApiError(str(exc)) from exc
 
     if response.status_code == 429:
-        raise RateLimitError("AbuseIPDB rate limit reached. Try again later.")
+        raise RateLimitError(f"Rate limit exceeded for {url}")
 
     if response.status_code != 200:
         raise ApiError(f"HTTP {response.status_code}: {response.text[:_MAX_ERROR_TEXT]}")
