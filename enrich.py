@@ -11,12 +11,14 @@ from tqdm import tqdm
 
 from src.config import ABUSEIPDB_API_KEY, OUTPUT_DIR, VT_API_KEY
 from src.enrichers.abuseipdb import enrich_abuseipdb
-from src.enrichers.virustotal import enrich_virustotal
 from src.enrichers.http_client import ApiError, RateLimitError
 from src.enrichers.mock import enrich_mock
+from src.enrichers.virustotal import enrich_virustotal
 from src.ioc_parser import detect_ioc_type, normalize_ioc
 from src.reporting import generate_summary
 from src.scoring import compute_risk_score, get_verdict
+
+_VT_SUPPORTED = {"ip", "domain", "hash", "url"}
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 _log = logging.getLogger(__name__)
@@ -47,7 +49,7 @@ def process_iocs(input_path: str) -> list[dict]:
             except ApiError as exc:
                 _log.warning("AbuseIPDB error for %s: %s, using mock data", ioc, exc)
 
-        if VT_API_KEY:
+        if VT_API_KEY and ioc_type in _VT_SUPPORTED:
             try:
                 enriched = enrich_virustotal(enriched, api_key=VT_API_KEY)
             except RateLimitError:

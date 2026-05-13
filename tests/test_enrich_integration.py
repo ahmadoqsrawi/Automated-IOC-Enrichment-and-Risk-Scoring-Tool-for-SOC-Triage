@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import patch
 
 import pytest
@@ -58,6 +59,7 @@ class TestProcessIocsWithVirusTotal:
         """VirusTotal enricher is called when VT_API_KEY is set."""
         import enrich as enrich_mod
         monkeypatch.setattr(enrich_mod, "VT_API_KEY", "fake-vt-key")
+        monkeypatch.setattr(enrich_mod, "ABUSEIPDB_API_KEY", "fake-abuse-key")
         csv_file = tmp_path / "iocs.csv"
         csv_file.write_text("ioc\n8.8.8.8\n")
         with patch("src.enrichers.virustotal.get_json") as mock_vt:
@@ -78,6 +80,7 @@ class TestProcessIocsWithVirusTotal:
         """VirusTotal enricher is skipped when VT_API_KEY is not set."""
         import enrich as enrich_mod
         monkeypatch.setattr(enrich_mod, "VT_API_KEY", None)
+        monkeypatch.setattr(enrich_mod, "ABUSEIPDB_API_KEY", "fake-abuse-key")
         csv_file = tmp_path / "iocs.csv"
         csv_file.write_text("ioc\n8.8.8.8\n")
         with patch("src.enrichers.virustotal.get_json") as mock_vt:
@@ -87,14 +90,17 @@ class TestProcessIocsWithVirusTotal:
         mock_vt.assert_not_called()
         assert results[0]["vt_malicious"] == 0
 
-    def test_vt_rate_limit_falls_back_to_mock(self, monkeypatch, tmp_path):
+    def test_vt_rate_limit_falls_back_to_mock(self, monkeypatch, tmp_path, caplog):
         """VirusTotal rate limit error falls back gracefully without crashing."""
         import enrich as enrich_mod
         monkeypatch.setattr(enrich_mod, "VT_API_KEY", "fake-vt-key")
+        monkeypatch.setattr(enrich_mod, "ABUSEIPDB_API_KEY", "fake-abuse-key")
         csv_file = tmp_path / "iocs.csv"
         csv_file.write_text("ioc\n8.8.8.8\n")
         with patch("src.enrichers.virustotal.get_json", side_effect=RateLimitError("rate limit")):
             with patch("src.enrichers.abuseipdb.get_json") as mock_abuse:
                 mock_abuse.return_value = {"data": {"abuseConfidenceScore": 0, "totalReports": 0, "countryCode": "US", "isp": "Google"}}
-                results = enrich_mod.process_iocs(str(csv_file))
+                with caplog.at_level(logging.WARNING, logger="src.enrich"):
+                    results = enrich_mod.process_iocs(str(csv_file))
+        assert any("rate limit" in m.lower() for m in caplog.messages)
         assert results[0]["vt_malicious"] == 0
