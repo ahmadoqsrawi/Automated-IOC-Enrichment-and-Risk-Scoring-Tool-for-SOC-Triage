@@ -23,7 +23,7 @@ def detect_ioc_type(ioc: str) -> IOCType:
     except ValueError:
         pass
 
-    if value.startswith(("http://", "https://")):
+    if value.lower().startswith(("http://", "https://")):
         return "url"
 
     if _MD5_RE.match(value) or _SHA1_RE.match(value) or _SHA256_RE.match(value):
@@ -41,7 +41,7 @@ def normalize_ioc(ioc: str) -> str:
 
     value = ioc.strip()
 
-    if value.startswith(("http://", "https://")):
+    if value.lower().startswith(("http://", "https://")):
         # Only lowercase scheme+host, preserve case-sensitive path
         parsed = urlparse(value)
         normalized = urlunparse((

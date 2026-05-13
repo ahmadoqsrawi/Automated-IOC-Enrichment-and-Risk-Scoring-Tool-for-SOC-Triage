@@ -64,3 +64,9 @@ class TestEdgeCases:
     def test_normalize_url_preserves_path_case(self):
         result = normalize_ioc("https://Example.COM/CaseSensitivePath")
         assert result == "https://example.com/CaseSensitivePath"
+
+    def test_uppercase_scheme_detected_as_url(self):
+        assert detect_ioc_type("HTTP://example.com/path") == "url"
+
+    def test_mixed_case_scheme_detected_as_url(self):
+        assert detect_ioc_type("Https://example.com/path") == "url"
