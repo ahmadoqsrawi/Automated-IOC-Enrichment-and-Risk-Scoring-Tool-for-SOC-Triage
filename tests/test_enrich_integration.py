@@ -148,4 +148,4 @@ class TestProcessIocsWithUrlhaus:
                 results = enrich_mod.process_iocs(str(csv_file))
         assert any("rate limit" in m.lower() for m in caplog.messages)
         # Falls back to mock data; URL mock default is "online"
-        assert results[0]["urlhaus_status"] is not None
+        assert results[0]["urlhaus_status"] == "online"
