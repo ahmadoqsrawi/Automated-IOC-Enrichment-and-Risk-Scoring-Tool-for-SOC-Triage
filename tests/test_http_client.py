@@ -1,5 +1,8 @@
+import requests
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from src.enrichers.http_client import get_json, RateLimitError, ApiError
 
 
@@ -19,8 +22,9 @@ class TestGetJson:
         mock_response.status_code = 429
 
         with patch("src.enrichers.http_client.requests.get", return_value=mock_response):
-            with pytest.raises(RateLimitError):
+            with pytest.raises(RateLimitError) as exc_info:
                 get_json("https://api.example.com", headers={}, params={})
+        assert "rate limit" in str(exc_info.value).lower()
 
     def test_raises_api_error_on_non_200(self):
         mock_response = MagicMock()
@@ -33,8 +37,21 @@ class TestGetJson:
         assert "401" in str(exc_info.value)
 
     def test_raises_api_error_on_request_exception(self):
-        import requests as req
-        with patch("src.enrichers.http_client.requests.get", side_effect=req.RequestException("timeout")):
+        with patch("src.enrichers.http_client.requests.get", side_effect=requests.RequestException("timeout")):
             with pytest.raises(ApiError) as exc_info:
                 get_json("https://api.example.com", headers={}, params={})
         assert "timeout" in str(exc_info.value)
+
+    def test_raises_api_error_on_invalid_json(self):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = ValueError("Invalid JSON")
+
+        with patch("src.enrichers.http_client.requests.get", return_value=mock_response):
+            with pytest.raises(ApiError) as exc_info:
+                get_json("https://api.example.com", headers={}, params={})
+        assert "Invalid JSON" in str(exc_info.value)
+
+    def test_raises_value_error_on_non_positive_timeout(self):
+        with pytest.raises(ValueError, match="timeout must be positive"):
+            get_json("https://api.example.com", headers={}, params={}, timeout=0)
