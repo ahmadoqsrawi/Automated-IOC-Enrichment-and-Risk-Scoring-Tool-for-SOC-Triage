@@ -12,7 +12,7 @@ from tqdm import tqdm
 from src.config import ABUSEIPDB_API_KEY, OUTPUT_DIR, URLHAUS_AUTH_KEY, VT_API_KEY
 from src.enrichers.abuseipdb import enrich_abuseipdb
 from src.enrichers.http_client import ApiError, RateLimitError
-from src.enrichers.mock import enrich_mock
+from src.enrichers.base import EnrichmentResult
 from src.enrichers.urlhaus import enrich_urlhaus
 from src.enrichers.virustotal import enrich_virustotal
 from src.ioc_parser import detect_ioc_type, normalize_ioc
@@ -41,31 +41,31 @@ def process_iocs(input_path: str) -> list[dict]:
         ioc = normalize_ioc(raw_ioc)
         ioc_type = str(row.get("type", "")).strip() or detect_ioc_type(ioc)
 
-        enriched = enrich_mock(ioc, ioc_type)
+        enriched = EnrichmentResult(ioc=ioc, ioc_type=ioc_type)
 
         if ioc_type == "ip" and ABUSEIPDB_API_KEY:
             try:
                 enriched = enrich_abuseipdb(enriched, api_key=ABUSEIPDB_API_KEY)
             except RateLimitError:
-                _log.warning("AbuseIPDB rate limit hit for %s, using mock data", ioc)
+                _log.warning("AbuseIPDB rate limit hit for %s, skipping", ioc)
             except ApiError as exc:
-                _log.warning("AbuseIPDB error for %s: %s, using mock data", ioc, exc)
+                _log.warning("AbuseIPDB error for %s: %s, skipping", ioc, exc)
 
         if VT_API_KEY and ioc_type in _VT_SUPPORTED:
             try:
                 enriched = enrich_virustotal(enriched, api_key=VT_API_KEY)
             except RateLimitError:
-                _log.warning("VirusTotal rate limit hit for %s, using mock data", ioc)
+                _log.warning("VirusTotal rate limit hit for %s, skipping", ioc)
             except ApiError as exc:
-                _log.warning("VirusTotal error for %s: %s, using mock data", ioc, exc)
+                _log.warning("VirusTotal error for %s: %s, skipping", ioc, exc)
 
         if URLHAUS_AUTH_KEY is not None and ioc_type in _URLHAUS_SUPPORTED:
             try:
                 enriched = enrich_urlhaus(enriched, auth_key=URLHAUS_AUTH_KEY)
             except RateLimitError:
-                _log.warning("URLhaus rate limit hit for %s, using mock data", ioc)
+                _log.warning("URLhaus rate limit hit for %s, skipping", ioc)
             except ApiError as exc:
-                _log.warning("URLhaus error for %s: %s, using mock data", ioc, exc)
+                _log.warning("URLhaus error for %s: %s, skipping", ioc, exc)
 
         risk_score, score_breakdown = compute_risk_score(enriched)
         verdict = get_verdict(risk_score)

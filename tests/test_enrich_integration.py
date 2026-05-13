@@ -33,7 +33,7 @@ class TestProcessIocsWithRealEnricher:
         assert records[0]["abuse_score"] == 95
         assert records[0]["country"] == "CN"
 
-    def test_domain_still_uses_mock_when_key_present(self, tmp_path):
+    def test_domain_skips_abuseipdb_when_key_present(self, tmp_path):
         csv = tmp_path / "iocs.csv"
         csv.write_text("ioc,type\nexample.com,domain\n")
 
@@ -43,7 +43,7 @@ class TestProcessIocsWithRealEnricher:
         assert len(records) == 1
         assert records[0]["type"] == "domain"
 
-    def test_ip_uses_mock_when_no_key(self, tmp_path):
+    def test_ip_returns_empty_fields_when_no_key(self, tmp_path):
         csv = tmp_path / "iocs.csv"
         csv.write_text("ioc,type\n8.8.8.8,ip\n")
 
@@ -52,6 +52,7 @@ class TestProcessIocsWithRealEnricher:
 
         assert len(records) == 1
         assert records[0]["ioc"] == "8.8.8.8"
+        assert records[0]["abuse_score"] == 0
 
 
 class TestProcessIocsWithVirusTotal:
@@ -90,7 +91,7 @@ class TestProcessIocsWithVirusTotal:
         mock_vt.assert_not_called()
         assert results[0]["vt_malicious"] == 0
 
-    def test_vt_rate_limit_falls_back_to_mock(self, monkeypatch, tmp_path, caplog):
+    def test_vt_rate_limit_falls_back_gracefully(self, monkeypatch, tmp_path, caplog):
         """VirusTotal rate limit error falls back gracefully without crashing."""
         import enrich as enrich_mod
         monkeypatch.setattr(enrich_mod, "VT_API_KEY", "fake-vt-key")
@@ -147,5 +148,4 @@ class TestProcessIocsWithUrlhaus:
             with caplog.at_level(logging.WARNING, logger="src.enrich"):
                 results = enrich_mod.process_iocs(str(csv_file))
         assert any("rate limit" in m.lower() for m in caplog.messages)
-        # Falls back to mock data; URL mock default is "online"
-        assert results[0]["urlhaus_status"] == "online"
+        assert results[0]["urlhaus_status"] == "not_found"
